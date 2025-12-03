@@ -2,9 +2,9 @@
 
 - [Assignment Brief](assignment.md)
 
-Name:
+Name: Seanne Oriemo
 
-Student Number: 
+Student Number: C24384533
 
 # Screenshots
 
