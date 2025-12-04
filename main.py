@@ -2,8 +2,7 @@ import os
 import sqlite3
 import pandas as pd
 
-# Resolve paths relative to this script's directory so running from
-# a different cwd still finds the data files.
+# Resolve paths relative to this script so running from another CWD still works
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BOOKS_DIR = os.path.join(BASE_DIR, "abc_books")
 DB_PATH = os.path.join(BASE_DIR, "tunes.db")
