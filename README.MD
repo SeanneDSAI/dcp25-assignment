@@ -84,7 +84,6 @@ The project is structured into modular components:
 |-----------|-----------|
 | main.py | Self written |
 | test.py | Modified from [main.py]() |
-| test.py | From [reference]() |
 
 # References
 * [Youtube Video1](https://www.youtube.com/watch?v=6eWSWlAfx0w)
