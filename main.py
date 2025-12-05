@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import sys
+import pandas as pd
 import analysis  # Importing your analysis.py
 
 # Resolve paths relative to this script
@@ -8,15 +9,17 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BOOKS_DIR = os.path.join(BASE_DIR, "abc_books")
 DB_PATH = os.path.join(BASE_DIR, "tunes.db")
 
-# --- INGESTION LOGIC (Kept in main or ingest.py) ---
+# --- INGESTION LOGIC ---
 
-def setup_database():
+def setup_database() -> None:
+    """Creates the database table with the new reference_number column."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tunes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             book_id INTEGER,
+            reference_number TEXT,
             title TEXT,
             tune_type TEXT,
             meter TEXT,
@@ -27,14 +30,16 @@ def setup_database():
     conn.commit()
     conn.close()
 
-def save_tune_to_db(tune_data):
+def save_tune_to_db(tune_data: dict) -> None:
+    """Inserts a single tune dictionary into the database."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO tunes (book_id, title, tune_type, meter, key_sig, content)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO tunes (book_id, reference_number, title, tune_type, meter, key_sig, content)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (
         tune_data.get('book_id'),
+        tune_data.get('reference_number', '0'), # New field
         tune_data.get('title', 'Unknown'),
         tune_data.get('type', 'Unknown'),
         tune_data.get('meter', ''),
@@ -44,7 +49,8 @@ def save_tune_to_db(tune_data):
     conn.commit()
     conn.close()
 
-def process_file(file_path, book_id):
+def process_file(file_path: str, book_id: int) -> None:
+    """Parses a specific ABC file and extracts X-reference numbers."""
     with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
         lines = [line.rstrip('\n') for line in f.readlines()]
 
@@ -58,7 +64,14 @@ def process_file(file_path, book_id):
         if line.startswith('X:'):
             if in_tune and current_tune:
                 save_tune_to_db(current_tune)
-            current_tune = {'book_id': book_id, 'content': ''}
+            
+            # Start new tune and capture the Reference Number (X: value)
+            ref_num = line[2:].strip()
+            current_tune = {
+                'book_id': book_id, 
+                'reference_number': ref_num, 
+                'content': ''
+            }
             in_tune = True
 
         if in_tune:
@@ -75,7 +88,8 @@ def process_file(file_path, book_id):
     if in_tune and current_tune:
         save_tune_to_db(current_tune)
 
-def ingest_data():
+def ingest_data() -> None:
+    """Main logic to traverse directories and process all files."""
     print("\n--- Starting Data Ingestion ---")
     setup_database()
     if not os.path.exists(BOOKS_DIR):
@@ -96,18 +110,20 @@ def ingest_data():
 
 # --- UI HELPER ---
 
-def print_results(df_results):
+def print_results(df_results: pd.DataFrame) -> None:
+    """Formats and prints search results."""
     if df_results.empty:
         print("\nNo results found.")
     else:
         print("\n--- Results ---")
-        print(df_results[['id', 'book_id', 'title', 'tune_type']].to_string(index=False))
+        # Show reference number in the output now
+        print(df_results[['book_id', 'reference_number', 'title', 'tune_type']].to_string(index=False))
         print(f"({len(df_results)} tunes found)")
 
 # --- MAIN MENU ---
 
-def main_menu():
-    # Load DataFrame using analysis module
+def main_menu() -> None:
+    """Displays the interactive CLI menu."""
     df = analysis.load_data()
     
     while True:
@@ -116,14 +132,15 @@ def main_menu():
         print("2. Show Statistics")
         print("3. Search by Title")
         print("4. Search by Book Number")
-        print("5. Search by Tune ID (View Notes)")
-        print("6. Exit")
+        print("5. Search by Book AND Reference Number (X:)")
+        print("6. Search by Global DB ID")
+        print("7. Exit")
 
         choice = input("Choice: ")
 
         if choice == '1':
             ingest_data()
-            df = analysis.load_data() # Reload after ingest
+            df = analysis.load_data()
             
         elif choice == '2':
             print(analysis.get_stats(df))
@@ -139,25 +156,43 @@ def main_menu():
             bk = input("Enter Book Number: ")
             results = analysis.get_tunes_by_book(df, bk)
             print_results(results)
-            
+
         elif choice == '5':
+            # NEW OPTION
             if df.empty: df = analysis.load_data()
-            tid = input("Enter Tune ID: ")
-            results = analysis.get_tune_by_id(df, tid)
+            bk = input("Enter Book Number: ")
+            ref = input("Enter Reference Number (X value): ")
+            
+            results = analysis.get_tune_by_book_and_ref(df, bk, ref)
             
             if not results.empty:
                 row = results.iloc[0]
                 print("\n" + "="*40)
-                print(f"ID: {row['id']} | Book: {row['book_id']}")
+                print(f"Book: {row['book_id']} | Ref (X): {row['reference_number']}")
                 print(f"Title: {row['title']}")
                 print(f"Type: {row['tune_type']} | Key: {row['key_sig']}")
                 print("="*40)
                 print(row['content'])
                 print("="*40)
             else:
+                print("Tune not found in that book.")
+            
+        elif choice == '6':
+            if df.empty: df = analysis.load_data()
+            tid = input("Enter Global Tune ID: ")
+            results = analysis.get_tune_by_id(df, tid)
+            
+            if not results.empty:
+                row = results.iloc[0]
+                print("\n" + "="*40)
+                print(f"Global ID: {row['id']} | Title: {row['title']}")
+                print("="*40)
+                print(row['content'])
+                print("="*40)
+            else:
                 print("ID not found.")
                 
-        elif choice == '6':
+        elif choice == '7':
             print("Goodbye.")
             sys.exit()
         else:
