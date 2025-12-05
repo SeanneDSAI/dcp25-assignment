@@ -12,11 +12,11 @@ Course Code: TU850 - 2
 
 **Main Menu Interface:**
 ![Main Menu](images/menu.png) 
-(images/menu_cli.png) 
+![Main Menu](images/menu_cli.png) 
 
 **Data Ingestion Process:**
 ![Ingestion Output](images/ingest_code.png)
-(images/ingest_output.png)
+![Ingestion Output](images/ingest_output.png)
 
 **Searching for Tunes:**
 ![Search Results](images/search_output.png)
@@ -147,17 +147,6 @@ public void render()
 }
 ```
 
-This is an image using a relative URL:
-
-![An image](images/p8.png)
-
-This is an image using an absolute URL:
-
-![A different image](https://bryanduggandotorg.files.wordpress.com/2019/02/infinite-forms-00045.png?w=595&h=&zoom=2)
-
-This is a youtube video:
-
-[![YouTube](http://img.youtube.com/vi/J2kHSSFA4NU/0.jpg)](https://www.youtube.com/watch?v=J2kHSSFA4NU)
 
 This is a table:
 
