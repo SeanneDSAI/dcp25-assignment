@@ -87,8 +87,8 @@ The project is structured into modular components:
 | test.py | From [reference]() |
 
 # References
-* [Item 1](https://www.youtube.com/watch?v=6eWSWlAfx0w)
-* [Item 2](https://www.youtube.com/watch?v=Uh2ebFW8OYM)
+* [Youtube Video1](https://www.youtube.com/watch?v=6eWSWlAfx0w)
+* [Youtube Video2](https://www.youtube.com/watch?v=Uh2ebFW8OYM)
 
 # What I am most proud of in the assignment
 
