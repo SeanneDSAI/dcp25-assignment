@@ -1,20 +1,18 @@
 import os
 import sqlite3
-import pandas as pd
+import sys
+import analysis  # Importing your analysis.py
 
-# Resolve paths relative to this script so running from another CWD still works
+# Resolve paths relative to this script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BOOKS_DIR = os.path.join(BASE_DIR, "abc_books")
 DB_PATH = os.path.join(BASE_DIR, "tunes.db")
 
+# --- INGESTION LOGIC (Kept in main or ingest.py) ---
 
 def setup_database():
-    """
-    Creates the tunes table if it doesn't exist.
-    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tunes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,17 +24,12 @@ def setup_database():
             content TEXT
         )
     ''')
-
     conn.commit()
     conn.close()
-    print("Database initialized.")
-
 
 def save_tune_to_db(tune_data):
-    """Helper function to insert a dictionary of tune data into SQLite"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
     cursor.execute('''
         INSERT INTO tunes (book_id, title, tune_type, meter, key_sig, content)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -48,43 +41,28 @@ def save_tune_to_db(tune_data):
         tune_data.get('key', ''),
         tune_data.get('content', '')
     ))
-
     conn.commit()
     conn.close()
 
-
 def process_file(file_path, book_id):
-    """
-    Reads an ABC file, parses multiple tunes, and saves them to DB.
-    """
     with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-        lines = f.readlines()
-
-    # Clean lines (preserve internal spacing; remove trailing newlines)
-    lines = [line.rstrip('\n') for line in lines]
+        lines = [line.rstrip('\n') for line in f.readlines()]
 
     current_tune = {}
     in_tune = False
 
     for raw in lines:
         line = raw.strip()
-        if not line:
-            continue
+        if not line: continue
 
-        # X: indicates the start of a new tune
         if line.startswith('X:'):
-            # If we were already building a tune, save the previous one
             if in_tune and current_tune:
                 save_tune_to_db(current_tune)
-
-            # Reset for the new tune
             current_tune = {'book_id': book_id, 'content': ''}
             in_tune = True
 
         if in_tune:
             current_tune['content'] += line + "\n"
-
-            # Extract Metadata
             if line.startswith('T:') and 'title' not in current_tune:
                 current_tune['title'] = line[2:].strip()
             elif line.startswith('R:'):
@@ -94,89 +72,96 @@ def process_file(file_path, book_id):
             elif line.startswith('K:'):
                 current_tune['key'] = line[2:].strip()
 
-    # Save the very last tune in the file
     if in_tune and current_tune:
         save_tune_to_db(current_tune)
 
-
 def ingest_data():
-    print("--- Starting Data Ingestion ---")
-    setup_database()  # Ensure table exists
-
-    # Iterate over directories in abc_books
+    print("\n--- Starting Data Ingestion ---")
+    setup_database()
     if not os.path.exists(BOOKS_DIR):
         print(f"Error: Folder '{BOOKS_DIR}' not found.")
         return
 
+    count = 0
     for item in os.listdir(BOOKS_DIR):
         item_path = os.path.join(BOOKS_DIR, item)
-
-        # Check if it's a directory and has a numeric name (Book ID)
         if os.path.isdir(item_path) and item.isdigit():
             book_id = int(item)
             print(f"Processing Book {book_id}...")
-
-            # Iterate over files in the numbered directory
             for file in os.listdir(item_path):
                 if file.endswith('.abc'):
-                    file_path = os.path.join(item_path, file)
-                    process_file(file_path, book_id)
+                    process_file(os.path.join(item_path, file), book_id)
+                    count += 1
+    print(f"--- Ingestion Complete ({count} files) ---")
 
-    print("--- Ingestion Complete ---")
+# --- UI HELPER ---
 
+def print_results(df_results):
+    if df_results.empty:
+        print("\nNo results found.")
+    else:
+        print("\n--- Results ---")
+        print(df_results[['id', 'book_id', 'title', 'tune_type']].to_string(index=False))
+        print(f"({len(df_results)} tunes found)")
 
-def get_dataframe():
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql("SELECT * FROM tunes", conn)
-    conn.close()
-    return df
-
-
-def search_tunes(search_term):
-    df = get_dataframe()
-    if df.empty:
-        return "Database is empty."
-
-    # Case insensitive search on Title
-    results = df[df['title'].str.contains(search_term, case=False, na=False)]
-    return results[['book_id', 'title', 'tune_type']]
-
-
-def get_stats():
-    df = get_dataframe()
-    if df.empty:
-        print("Database is empty.")
-        return
-
-    print(f"Total Tunes: {len(df)}")
-    print("Tunes per Book:")
-    print(df['book_id'].value_counts())
-
+# --- MAIN MENU ---
 
 def main_menu():
+    # Load DataFrame using analysis module
+    df = analysis.load_data()
+    
     while True:
         print("\n=== ABC TUNE MANAGER 2025 ===")
-        print("1. Ingest/Reload Data (Parse Files)")
+        print("1. Ingest/Reload Data")
         print("2. Show Statistics")
-        print("3. Search for a Tune")
-        print("4. Exit")
+        print("3. Search by Title")
+        print("4. Search by Book Number")
+        print("5. Search by Tune ID (View Notes)")
+        print("6. Exit")
 
         choice = input("Choice: ")
 
         if choice == '1':
             ingest_data()
+            df = analysis.load_data() # Reload after ingest
+            
         elif choice == '2':
-            get_stats()
+            print(analysis.get_stats(df))
+            
         elif choice == '3':
-            term = input("Enter search term: ")
-            print(search_tunes(term))
+            if df.empty: df = analysis.load_data()
+            term = input("Enter title search term: ")
+            results = analysis.search_tunes(df, term)
+            print_results(results)
+            
         elif choice == '4':
+            if df.empty: df = analysis.load_data()
+            bk = input("Enter Book Number: ")
+            results = analysis.get_tunes_by_book(df, bk)
+            print_results(results)
+            
+        elif choice == '5':
+            if df.empty: df = analysis.load_data()
+            tid = input("Enter Tune ID: ")
+            results = analysis.get_tune_by_id(df, tid)
+            
+            if not results.empty:
+                row = results.iloc[0]
+                print("\n" + "="*40)
+                print(f"ID: {row['id']} | Book: {row['book_id']}")
+                print(f"Title: {row['title']}")
+                print(f"Type: {row['tune_type']} | Key: {row['key_sig']}")
+                print("="*40)
+                print(row['content'])
+                print("="*40)
+            else:
+                print("ID not found.")
+                
+        elif choice == '6':
             print("Goodbye.")
-            break
+            sys.exit()
         else:
             print("Invalid choice.")
 
-
 if __name__ == "__main__":
-    # This runs the menu when you press play
     main_menu()

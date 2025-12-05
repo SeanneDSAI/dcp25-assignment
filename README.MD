@@ -6,6 +6,8 @@ Name: Seanne Oriemo
 
 Student Number: C24384533
 
+Course Code: TU850 - 2
+
 # Screenshots
 
 # Description of the project
