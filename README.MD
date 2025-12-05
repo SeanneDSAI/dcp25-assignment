@@ -16,7 +16,7 @@ Course Code: TU850 - 2
 
 **Data Ingestion Process:**
 ![Ingestion Output](images/ingest_code.png)
-![Ingestion Output](images/ingest_output.png)
+![Ingestion Output](images/ingestion_output.png)
 
 **Searching for Tunes:**
 ![Search Results](images/search_output.png)
