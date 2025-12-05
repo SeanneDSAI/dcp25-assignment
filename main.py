@@ -9,6 +9,35 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BOOKS_DIR = os.path.join(BASE_DIR, "abc_books")
 DB_PATH = os.path.join(BASE_DIR, "tunes.db")
 
+# --- HELPER: TEXT CLEANER ---
+
+def clean_text(text: str) -> str:
+    """
+    Converts ABC-style escape codes (like \"a) into real characters (like ä).
+    Also removes surrounding whitespace.
+    """
+    if not text:
+        return ""
+    
+    # Common ABC special character codes
+    replacements = {
+        '\\"a': 'ä',
+        '\\"A': 'Ä',
+        '\\"o': 'ö',
+        '\\"O': 'Ö',
+        '\\"u': 'ü',
+        '\\"U': 'Ü',
+        '\\\'e': 'é',
+        '\\\'a': 'á',
+        '\\~n': 'ñ',
+        '\\c': 'ç'
+    }
+    
+    for code, char in replacements.items():
+        text = text.replace(code, char)
+        
+    return text.strip()
+
 # --- INGESTION LOGIC ---
 
 def setup_database() -> None:
@@ -39,7 +68,7 @@ def save_tune_to_db(tune_data: dict) -> None:
         VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (
         tune_data.get('book_id'),
-        tune_data.get('reference_number', '0'), # New field
+        tune_data.get('reference_number', '0'),
         tune_data.get('title', 'Unknown'),
         tune_data.get('type', 'Unknown'),
         tune_data.get('meter', ''),
@@ -65,7 +94,7 @@ def process_file(file_path: str, book_id: int) -> None:
             if in_tune and current_tune:
                 save_tune_to_db(current_tune)
             
-            # Start new tune and capture the Reference Number (X: value)
+            # Start new tune and capture Reference Number
             ref_num = line[2:].strip()
             current_tune = {
                 'book_id': book_id, 
@@ -76,10 +105,12 @@ def process_file(file_path: str, book_id: int) -> None:
 
         if in_tune:
             current_tune['content'] += line + "\n"
+            
+            # Apply clean_text() to Title and Type
             if line.startswith('T:') and 'title' not in current_tune:
-                current_tune['title'] = line[2:].strip()
+                current_tune['title'] = clean_text(line[2:])
             elif line.startswith('R:'):
-                current_tune['type'] = line[2:].strip()
+                current_tune['type'] = clean_text(line[2:])
             elif line.startswith('M:'):
                 current_tune['meter'] = line[2:].strip()
             elif line.startswith('K:'):
@@ -116,7 +147,6 @@ def print_results(df_results: pd.DataFrame) -> None:
         print("\nNo results found.")
     else:
         print("\n--- Results ---")
-        # Show reference number in the output now
         print(df_results[['book_id', 'reference_number', 'title', 'tune_type']].to_string(index=False))
         print(f"({len(df_results)} tunes found)")
 
@@ -158,11 +188,9 @@ def main_menu() -> None:
             print_results(results)
 
         elif choice == '5':
-            # NEW OPTION
             if df.empty: df = analysis.load_data()
             bk = input("Enter Book Number: ")
             ref = input("Enter Reference Number (X value): ")
-            
             results = analysis.get_tune_by_book_and_ref(df, bk, ref)
             
             if not results.empty:
